@@ -11,6 +11,13 @@ typedef enum ResultKind
     ERR
 } ResultKind;
 
+/*
+ * 注意: DEFINE_RESULT 使用 ## 进行标记粘贴。
+ * 它无法处理多标记类型，如 "const char *"。
+ * 请先 typedef 一个单标记类型：
+ * typedef const char * CString;
+ * DEFINE_RESULT(CString, int);
+ */
 #define DEFINE_RESULT(ok_type, err_type)         \
     typedef struct Result_##ok_type##_##err_type \
     {                                            \
@@ -22,30 +29,31 @@ typedef enum ResultKind
         } value;                                 \
     } Result_##ok_type##_##err_type;
 
+/* --- Ok --- */
 #define __RESULT_OK_PASTE(ok_type, err_type, ...) \
     (Result_##ok_type##_##err_type)               \
     {                                             \
         .kind = OK, .value = {.ok = __VA_ARGS__ } \
     }
-
 #define __RESULT_OK_IMPL(ok_type, err_type, ...) \
     __RESULT_OK_PASTE(ok_type, err_type, __VA_ARGS__)
+#define __RESULT_OK_CALL(...) __RESULT_OK_IMPL(__VA_ARGS__)
+#define Ok(types, ...) \
+    __RESULT_OK_CALL(__RESULT_EAT_PARENS types, (__VA_ARGS__))
 
+/* --- Err --- */
 #define __RESULT_ERR_PASTE(ok_type, err_type, ...)  \
     (Result_##ok_type##_##err_type)                 \
     {                                               \
         .kind = ERR, .value = {.err = __VA_ARGS__ } \
     }
-
 #define __RESULT_ERR_IMPL(ok_type, err_type, ...) \
     __RESULT_ERR_PASTE(ok_type, err_type, __VA_ARGS__)
-
-#define Ok(types, ...) \
-    __RESULT_OK_IMPL(__RESULT_EAT_PARENS types, (__VA_ARGS__))
-
+#define __RESULT_ERR_CALL(...) __RESULT_ERR_IMPL(__VA_ARGS__)
 #define Err(types, ...) \
-    __RESULT_ERR_IMPL(__RESULT_EAT_PARENS types, (__VA_ARGS__))
+    __RESULT_ERR_CALL(__RESULT_EAT_PARENS types, (__VA_ARGS__))
 
+/* --- APIs --- */
 #define is_ok(res) \
     ((res).kind == OK)
 
@@ -80,6 +88,7 @@ typedef enum ResultKind
         is_ok(__res_tmp) ? __res_tmp.value.ok : (func)(); \
     })
 
+/* --- map --- */
 #define __RESULT_MAP_PASTE(out_ok_type, err_type, res_in, var, ...)         \
     ({                                                                      \
         __auto_type __res_tmp = (res_in);                                   \
@@ -90,13 +99,13 @@ typedef enum ResultKind
                   __RESULT_OK_IMPL(out_ok_type, err_type, __VA_ARGS__);     \
               });                                                           \
     })
-
 #define __RESULT_MAP_IMPL(out_ok_type, err_type, res_in, var, ...) \
     __RESULT_MAP_PASTE(out_ok_type, err_type, res_in, var, __VA_ARGS__)
-
+#define __RESULT_MAP_CALL(...) __RESULT_MAP_IMPL(__VA_ARGS__)
 #define map(types, res_in, var, ...) \
-    __RESULT_MAP_IMPL(__RESULT_EAT_PARENS types, res_in, var, (__VA_ARGS__))
+    __RESULT_MAP_CALL(__RESULT_EAT_PARENS types, res_in, var, (__VA_ARGS__))
 
+/* --- map_err --- */
 #define __RESULT_MAP_ERR_PASTE(ok_type, out_err_type, res_in, var, ...)   \
     ({                                                                    \
         __auto_type __res_tmp = (res_in);                                 \
@@ -107,13 +116,13 @@ typedef enum ResultKind
                   __RESULT_ERR_IMPL(ok_type, out_err_type, __VA_ARGS__);  \
               });                                                         \
     })
-
 #define __RESULT_MAP_ERR_IMPL(ok_type, out_err_type, res_in, var, ...) \
     __RESULT_MAP_ERR_PASTE(ok_type, out_err_type, res_in, var, __VA_ARGS__)
-
+#define __RESULT_MAP_ERR_CALL(...) __RESULT_MAP_ERR_IMPL(__VA_ARGS__)
 #define map_err(types, res_in, var, ...) \
-    __RESULT_MAP_ERR_IMPL(__RESULT_EAT_PARENS types, res_in, var, (__VA_ARGS__))
+    __RESULT_MAP_ERR_CALL(__RESULT_EAT_PARENS types, res_in, var, (__VA_ARGS__))
 
+/* --- and_then  --- */
 #define __RESULT_AND_THEN_PASTE(out_ok_type, err_type, res_in, var, ...)    \
     ({                                                                      \
         __auto_type __res_tmp = (res_in);                                   \
@@ -124,11 +133,8 @@ typedef enum ResultKind
                   __VA_ARGS__;                                              \
               });                                                           \
     })
-
 #define __RESULT_AND_THEN_IMPL(out_ok_type, err_type, res_in, var, ...) \
     __RESULT_AND_THEN_PASTE(out_ok_type, err_type, res_in, var, __VA_ARGS__)
-
 #define __RESULT_AND_THEN_CALL(...) __RESULT_AND_THEN_IMPL(__VA_ARGS__)
-
 #define and_then(types, res_in, var, ...) \
     __RESULT_AND_THEN_CALL(__RESULT_EAT_PARENS types, res_in, var, (__VA_ARGS__))
